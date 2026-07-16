@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, HostListener, Inject, OnDestroy, OnInit, PLATFORM_ID } from '@angular/core';
 import { combineLatest, EMPTY, fromEvent, interval, merge, Observable, of, Subject, Subscription, timer } from 'rxjs';
-import { catchError, delayWhen, distinctUntilChanged, filter, map, scan, share, shareReplay, startWith, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
+import { catchError, delayWhen, distinctUntilChanged, filter, map, retry, scan, share, shareReplay, startWith, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
 import { AuditStatus, BlockExtended, CurrentPegs, FederationAddress, FederationUtxo, OptimizedMempoolStats, RecentPeg } from '@interfaces/node-api.interface';
 import { MempoolInfo, ReplacementInfo } from '@interfaces/websocket.interface';
 import { ApiService } from '@app/services/api.service';
@@ -45,6 +45,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   latestBlockHeight: number;
   mempoolTransactionsWeightPerSecondData: any;
   mempoolStats$: Observable<MempoolStatsData>;
+  isMempoolStatsLoading = true;
   transactionsWeightPerSecondOptions: any;
   isLoadingWebSocket$: Observable<boolean>;
   liquidPegsMonth$: Observable<any>;
@@ -217,9 +218,8 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
       .pipe(
         filter((state) => state === 2),
         switchMap(() => this.apiService.list2HStatistics$().pipe(
-          catchError((e) => {
-            return of(null);
-          })
+          retry({ count: 3, delay: 1000 }),
+          catchError(() => of([])),
         )),
         switchMap((mempoolStats) => {
           return merge(
@@ -238,6 +238,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         }),
         map((mempoolStats) => {
           if (mempoolStats) {
+            this.isMempoolStatsLoading = false;
             return {
               mempool: mempoolStats,
               weightPerSecond: this.handleNewMempoolData(mempoolStats.concat([])),
