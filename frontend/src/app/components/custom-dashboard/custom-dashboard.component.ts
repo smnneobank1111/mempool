@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, Inject, OnDestroy, OnInit, PLATFORM_ID } from '@angular/core';
 import { combineLatest, merge, Observable, of, Subject, Subscription } from 'rxjs';
-import { catchError, filter, map, scan, shareReplay, startWith, switchMap, tap } from 'rxjs/operators';
+import { catchError, filter, map, retry, scan, shareReplay, startWith, switchMap, tap } from 'rxjs/operators';
 import { BlockExtended, OptimizedMempoolStats, TransactionStripped } from '@interfaces/node-api.interface';
 import { MempoolInfo, ReplacementInfo } from '@interfaces/websocket.interface';
 import { ApiService } from '@app/services/api.service';
@@ -48,6 +48,7 @@ export class CustomDashboardComponent implements OnInit, OnDestroy, AfterViewIni
   latestBlockHeight: number;
   mempoolTransactionsWeightPerSecondData: any;
   mempoolStats$: Observable<MempoolStatsData>;
+  isMempoolStatsLoading: boolean = true;
   transactionsWeightPerSecondOptions: any;
   isLoadingWebSocket$: Observable<boolean>;
   isLoad: boolean = true;
@@ -229,9 +230,8 @@ export class CustomDashboardComponent implements OnInit, OnDestroy, AfterViewIni
       .pipe(
         filter((state) => state === 2),
         switchMap(() => this.apiService.list2HStatistics$().pipe(
-          catchError((e) => {
-            return of(null);
-          })
+          retry({ count: 3, delay: 1000 }),
+          catchError(() => of([])),
         )),
         switchMap((mempoolStats) => {
           return merge(
@@ -250,6 +250,7 @@ export class CustomDashboardComponent implements OnInit, OnDestroy, AfterViewIni
         }),
         map((mempoolStats) => {
           if (mempoolStats) {
+            this.isMempoolStatsLoading = false;
             return {
               mempool: mempoolStats,
               weightPerSecond: this.handleNewMempoolData(mempoolStats.concat([])),
